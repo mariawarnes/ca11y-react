@@ -3,10 +3,10 @@
 // https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/examples/datepicker-dialog/
 // https://react-dates.github.io/react-dates/?path=/story/daterangepicker-drp--default
 
-'use client'
+'use client';
 
-import type { ChangeEvent } from 'react'
-import React, { Fragment, useEffect, useState } from 'react'
+import type { ChangeEvent } from 'react';
+import React, { Fragment, useEffect, useState } from 'react';
 
 import {
   Button,
@@ -14,9 +14,9 @@ import {
   CloseIcon,
   InfoIcon,
   RightArrowIcon,
-} from '@/components'
-import { useSearch } from '@/context/SearchProvider'
-import type { DatepickerProps } from '@/types'
+} from '@/components';
+import { useSearch } from '@/context/SearchProvider';
+import type { DatepickerProps } from '@/types';
 import {
   adjustDateByMonth,
   dayLabels,
@@ -25,186 +25,201 @@ import {
   regex,
   toCustomURLDateString,
   weekInYear,
-} from '@/utils'
+} from '@/utils';
 
-import LeftArrowIcon from './icons/LeftArrowIcon'
+import LeftArrowIcon from './icons/LeftArrowIcon';
 
 type DayInfo = {
-  date: Date | null
-  weekNumber: number | null
-}
+  date: Date | null;
+  weekNumber: number | null;
+};
 
 const Datepicker = ({
   id,
   label,
   placeholder = 'e.g. 01/12/2026',
-  minDate,
+  minDate = new Date(), // Default to today
   maxDate,
   startDayOfWeek = 0, // 6 for Sunday, 0 for Monday, etc.
 }: DatepickerProps) => {
-  const { setFixedStartDate, setFixedEndDate } = useSearch()
+  const { setFixedStartDate, setFixedEndDate } = useSearch();
 
-  const [isOpen, setIsOpen] = useState(false)
-  const [isKeyPanelOpen, setIsKeyPanelOpen] = useState(false)
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
-  const [focusedDate, setFocusedDate] = useState<Date | null>(null)
-  const [inputValue, setInputValue] = useState('')
-  const [month, setMonth] = useState(new Date().getMonth())
-  const [year, setYear] = useState(new Date().getFullYear())
-  const [selectedWeekNum, setSelectedWeekNum] = useState<number | null>(null)
-  const minDateObj = minDate ? new Date(minDate) : undefined
-  const maxDateObj = maxDate ? new Date(maxDate) : undefined
+  const [isOpen, setIsOpen] = useState(false);
+  const [isKeyPanelOpen, setIsKeyPanelOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [focusedDate, setFocusedDate] = useState<Date | null>(null);
+  const [inputValue, setInputValue] = useState('');
+  const [month, setMonth] = useState(minDate.getMonth());
+  const [year, setYear] = useState(minDate.getFullYear());
+  const [selectedWeekNum, setSelectedWeekNum] = useState<number | null>(null);
 
-  const isStartDate = id.includes('start-date')
-  const isEndDate = id.includes('end-date')
+  const isStartDate = id.includes('start-date');
+  const isEndDate = id.includes('end-date');
 
   useEffect(() => {
     if (isOpen) {
-      const focusDate = focusedDate || selectedDate || new Date()
+      const focusDate = focusedDate || selectedDate || new Date(minDate);
+      if (!focusedDate && !selectedDate) {
+        focusDate.setDate(minDate.getDate() + 1);
+      }
 
       if (!selectedDate) {
-        // Determine the date to focus on (either selectedDate or today's date)
-        const focusDateId = `day-${focusDate.getDate()}-${focusDate.getMonth()}-${focusDate.getFullYear()}`
+        // Determine the date to focus on (either focusedDate, selectedDate or day after min date)
+        const focusDateId = `day-${focusDate.getDate()}-${focusDate.getMonth()}-${focusDate.getFullYear()}`;
 
         // Attempt to find the button for the focusDate
-        const focusButton = document.getElementById(focusDateId)
+        const focusButton = document.getElementById(focusDateId);
 
         // If the button is found, focus on it
         if (focusButton) {
-          focusButton.focus()
+          focusButton.focus();
         }
 
-        setFocusedDate(focusDate)
+        setFocusedDate(focusDate);
       }
 
       // Add event listener when the component mounts
-      document.addEventListener('keydown', handleKeydown)
+      document.addEventListener('keydown', handleKeydown);
 
       // Remove event listener when the component unmounts
       return () => {
-        document.removeEventListener('keydown', handleKeydown)
-      }
+        document.removeEventListener('keydown', handleKeydown);
+      };
     }
-  }, [focusedDate, isOpen, selectedDate])
+  }, [focusedDate, isOpen, selectedDate]);
+
+  const isDisabledDate = (date: Date): boolean => {
+    if (minDate && date <= minDate) {
+      return true;
+    } else if (maxDate && date >= maxDate) {
+      return true;
+    } else {
+      return false;
+    }
+  };
 
   const handleKeydown = (event: KeyboardEvent) => {
-    event.preventDefault()
-    let newFocusedDate = new Date(focusedDate || new Date())
+    event.preventDefault();
+    let newFocusedDate = new Date(focusedDate || minDate);
+    let tempDate = new Date(newFocusedDate); // Temporarily hold the new date for validation
 
     switch (event.key) {
       case 'ArrowRight':
-        newFocusedDate.setDate(newFocusedDate.getDate() + 1)
-        break
+        tempDate.setDate(tempDate.getDate() + 1);
+        break;
       case 'ArrowLeft':
-        newFocusedDate.setDate(newFocusedDate.getDate() - 1)
-        break
+        tempDate.setDate(tempDate.getDate() - 1);
+        break;
       case 'ArrowDown':
-        newFocusedDate.setDate(newFocusedDate.getDate() + 7)
-        break
+        tempDate.setDate(tempDate.getDate() + 7);
+        break;
       case 'ArrowUp':
-        newFocusedDate.setDate(newFocusedDate.getDate() - 7)
-        break
+        tempDate.setDate(tempDate.getDate() - 7);
+        break;
       case 'Enter':
       case ' ':
-        handleDateSelection(newFocusedDate)
-        break
+        if (!isDisabledDate(tempDate)) handleDateSelection(tempDate);
+        return; // Exit early to avoid setting focus on disabled date
       case 'Escape':
-        setIsOpen(false)
-        return
+        setIsOpen(false);
+        return; // Exit early
       case '?':
-        setIsKeyPanelOpen(!isKeyPanelOpen)
-        break
+        setIsKeyPanelOpen(!isKeyPanelOpen);
+        return; // Exit early
       case 'PageUp':
-        navigateMonth(-1)
-        newFocusedDate = adjustDateByMonth(newFocusedDate, -1)
-        break
+        navigateMonth(-1);
+        tempDate = adjustDateByMonth(tempDate, -1);
+        break;
       case 'PageDown':
-        navigateMonth(1)
-        newFocusedDate = adjustDateByMonth(newFocusedDate, 1)
-        break
+        navigateMonth(1);
+        tempDate = adjustDateByMonth(tempDate, 1);
+        break;
       case 'Home':
-        // Set the date to the first day of the current month
-        newFocusedDate.setDate(1)
-        break
+        tempDate.setDate(1);
+        break;
       case 'End':
-        // Set the date to the last day of the current month
-        newFocusedDate.setDate(
-          daysInMonth(newFocusedDate.getFullYear(), newFocusedDate.getMonth())
-        )
-        break
+        tempDate.setDate(
+          daysInMonth(tempDate.getFullYear(), tempDate.getMonth()),
+        );
+        break;
       default:
-        return
+        return; // Do nothing if key is not handled
     }
-    if (newFocusedDate.getMonth() !== month) {
-      setMonth(newFocusedDate.getMonth())
-      setYear(newFocusedDate.getFullYear())
-      navigateMonth(newFocusedDate.getMonth() - month)
+
+    // Check if the new date is not disabled before applying any changes
+    if (!isDisabledDate(tempDate)) {
+      newFocusedDate = tempDate;
+
+      // Additional logic for adjusting month and year if necessary
+      if (newFocusedDate.getMonth() !== month) {
+        setMonth(newFocusedDate.getMonth());
+        setYear(newFocusedDate.getFullYear());
+        navigateMonth(newFocusedDate.getMonth() - month);
+      }
+
+      setFocusedDate(newFocusedDate);
     }
-    setFocusedDate(newFocusedDate)
-  }
+  };
 
   const navigateMonth = (direction: number) => {
-    const newMonth = new Date(year, month + direction)
-    if (
-      (minDateObj && newMonth < minDateObj) ||
-      (maxDateObj && newMonth > maxDateObj)
-    ) {
-      return // Prevents navigation if it goes beyond minDate or maxDate
-    }
-    setMonth(newMonth.getMonth())
-    setYear(newMonth.getFullYear())
-  }
+    const newMonth = new Date(year, month + direction);
+    // if ((minDate && newMonth < minDate) || (maxDate && newMonth > maxDate)) {
+    //   return; // Prevents navigation if it goes beyond minDate or maxDate
+    // }
+    setMonth(newMonth.getMonth());
+    setYear(newMonth.getFullYear());
+  };
 
   const cancelSelection = () => {
-    setSelectedDate(null)
-    isStartDate && setFixedStartDate(null)
-    isEndDate && setFixedEndDate(null)
-    setSelectedWeekNum(null)
-    setInputValue('')
-    setIsOpen(false)
-  }
+    setSelectedDate(null);
+    isStartDate && setFixedStartDate(null);
+    isEndDate && setFixedEndDate(null);
+    setSelectedWeekNum(null);
+    setInputValue('');
+    setIsOpen(false);
+  };
 
   const confirmSelection = () => {
-    setIsOpen(false)
-  }
+    setIsOpen(false);
+  };
 
   // Create a reordered day labels array based on startDayOfWeek
   const adjustedDayLabels = () => {
-    const rotation = startDayOfWeek % dayLabels.length
-    return [...dayLabels.slice(rotation), ...dayLabels.slice(0, rotation)]
-  }
+    const rotation = startDayOfWeek % dayLabels.length;
+    return [...dayLabels.slice(rotation), ...dayLabels.slice(0, rotation)];
+  };
 
   const generateCalendarDays = (year: number, month: number): DayInfo[] => {
-    const numDays = daysInMonth(year, month)
-    let firstDayOfMonth = new Date(year, month).getDay() - startDayOfWeek
+    const numDays = daysInMonth(year, month);
+    let firstDayOfMonth = new Date(year, month).getDay() - startDayOfWeek;
 
     if (firstDayOfMonth < 0) {
-      firstDayOfMonth += 7
+      firstDayOfMonth += 7;
     }
 
-    const days = []
+    const days = [];
     // Track the current week number
-    let currentWeekNumber = weekInYear(new Date(year, month, 1))
+    let currentWeekNumber = weekInYear(new Date(year, month, 1));
 
     // Calculate the date of the first visible cell in the calendar
-    const firstVisibleDate = new Date(year, month, 1 - firstDayOfMonth)
+    const firstVisibleDate = new Date(year, month, 1 - firstDayOfMonth);
     // Adjust week number if the first visible date is from the previous month
     if (firstVisibleDate.getMonth() !== month) {
-      currentWeekNumber = weekInYear(firstVisibleDate)
+      currentWeekNumber = weekInYear(firstVisibleDate);
     }
 
     // Fill blanks for days from the previous month and include week numbers for the first day of each week
     for (let i = 0; i < firstDayOfMonth; i++) {
       if (i === 0) {
         // Add week number for the first cell of the row
-        days.push({ date: null, weekNumber: currentWeekNumber })
+        days.push({ date: null, weekNumber: currentWeekNumber });
       } else {
-        days.push({ date: null, weekNumber: null }) // No week number for empty cells after the first
+        days.push({ date: null, weekNumber: null }); // No week number for empty cells after the first
       }
     }
     // Push days of the current month and track weeks
     for (let day = 1; day <= numDays; day++) {
-      const date = new Date(year, month, day)
+      const date = new Date(year, month, day);
       // Each time we hit the start of a new week
       // Push the date
       // increment the week number
@@ -213,64 +228,62 @@ const Datepicker = ({
         days.push({
           date,
           weekNumber: null,
-        })
-        currentWeekNumber = weekInYear(date)
+        });
+        currentWeekNumber = weekInYear(date);
         days.push({
           date: null,
           weekNumber: currentWeekNumber,
-        })
+        });
       } else {
         days.push({
           date,
           weekNumber: null,
-        })
+        });
       }
     }
 
-    return days
-  }
+    return days;
+  };
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value.replace(/[^0-9]/g, '')
-    let formattedValue = value
+    const value = event.target.value.replace(/[^0-9]/g, '');
+    let formattedValue = value;
     if (value.length > 2) {
-      formattedValue = `${value.slice(0, 2)}/${value.slice(2)}`
+      formattedValue = `${value.slice(0, 2)}/${value.slice(2)}`;
     }
     if (value.length > 4) {
-      formattedValue = `${value.slice(0, 2)}/${value.slice(2, 4)}/${value.slice(
-        4
-      )}`
+      formattedValue = `${value.slice(0, 2)}/${value.slice(2, 4)}/${value.slice(4)}`;
     }
-    setInputValue(formattedValue)
+    setInputValue(formattedValue);
     // Update the selected date if the input is a valid date
     // Check if the input forms a valid date
     if (formattedValue.length === 10) {
       const [day, month, year] = formattedValue
         .split('/')
-        .map((num: string) => parseInt(num, 10))
-      const date = new Date(year, month - 1, day)
+        .map((num: string) => parseInt(num, 10));
+      const date = new Date(year, month - 1, day);
 
       if (!isNaN(date.getTime()) && date.getDate() === day) {
         // Check for a valid date and correct day (to handle invalid dates like Feb 30)
-        setSelectedDate(date)
-        isStartDate && setFixedStartDate(date)
-        isEndDate && setFixedEndDate(date)
-        setMonth(month - 1) // Update calendar to this month
-        setYear(year) // Update calendar to this year
-        // Optionally, if you want to automatically open the calendar to show the selected date:
-        setIsOpen(true)
+        setSelectedDate(date);
+        isStartDate && setFixedStartDate(date);
+        isEndDate && setFixedEndDate(date);
+        setMonth(month - 1); // Update calendar to this month
+        setYear(year); // Update calendar to this year
+        // Open the calendar to show the selected date:
+        setIsOpen(true);
       }
     }
-  }
+  };
 
   const handleDateSelection = (date: Date) => {
-    setSelectedDate(date)
-    isStartDate && setFixedStartDate(date)
-    isEndDate && setFixedEndDate(date)
-    setSelectedWeekNum(weekInYear(date))
-    setIsOpen(false)
-    setInputValue(toCustomURLDateString(date, '/'))
-  }
+    setSelectedDate(date);
+    isStartDate && setFixedStartDate(date);
+    isEndDate && setFixedEndDate(date);
+    setSelectedWeekNum(weekInYear(date));
+    setIsOpen(false);
+    setInputValue(toCustomURLDateString(date, '/'));
+  };
 
   return (
     <>
@@ -321,7 +334,12 @@ const Datepicker = ({
                 styleType="none"
                 handleClick={() => navigateMonth(-1)}
                 disabled={
-                  minDateObj && new Date(year, month - 1, 1) < minDateObj
+                  minDate &&
+                  new Date(
+                    year,
+                    month - 1,
+                    new Date(year, month - 2, 0).getDate(),
+                  ) <= minDate
                 }
                 Icon={LeftArrowIcon}
                 label="Go to previous month"
@@ -333,9 +351,7 @@ const Datepicker = ({
               <Button
                 styleType="none"
                 handleClick={() => navigateMonth(1)}
-                disabled={
-                  maxDateObj && new Date(year, month + 1, 1) > maxDateObj
-                }
+                disabled={maxDate && new Date(year, month + 1, 1) >= maxDate}
                 Icon={RightArrowIcon}
                 label="Go to next month"
                 showCaret={false}
@@ -365,9 +381,9 @@ const Datepicker = ({
                 {generateCalendarDays(year, month)
                   .reduce<DayInfo[][]>((acc, dayInfo, index) => {
                     // Start a new row for each week
-                    if (index % 8 === 0) acc.push([])
-                    acc[acc.length - 1].push(dayInfo)
-                    return acc
+                    if (index % 8 === 0) acc.push([]);
+                    acc[acc.length - 1].push(dayInfo);
+                    return acc;
                   }, [])
                   .map((week, weekIdx) => (
                     <tr key={weekIdx} className="table-row">
@@ -376,11 +392,11 @@ const Datepicker = ({
                         if (weekNumber) {
                           return (
                             <td key={dayIdx} className="text-center">
-                              <div className="size-10 p-1  text-center text-sm leading-8 opacity-70">
+                              <div className="size-10 p-1 text-center text-sm leading-8 opacity-70">
                                 {weekNumber}
                               </div>
                             </td>
-                          )
+                          );
                         }
                         // Date
                         return (
@@ -401,39 +417,15 @@ const Datepicker = ({
                                 onKeyDown={() => handleKeydown}
                                 onClick={() => handleDateSelection(date)}
                                 disabled={
-                                  (minDateObj && date < minDateObj) ||
-                                  (maxDateObj && date > maxDateObj)
+                                  (minDate && date < minDate) ||
+                                  (maxDate && date > maxDate)
                                 }
                                 id={`day-${date.getDate()}-${date.getMonth()}-${date.getFullYear()}`}
                                 className={`size-10 rounded-full border-2 p-1 text-sm hover:bg-primary focus:outline-none
-                                ${
-                                  focusedDate &&
-                                  focusedDate.setHours(0, 0, 0, 0) ===
-                                    date.setHours(0, 0, 0, 0)
-                                    ? 'border-primary'
-                                    : 'border-transparent'
-                                }
-                                ${
-                                  new Date().setHours(0, 0, 0, 0) ===
-                                  date.setHours(0, 0, 0, 0)
-                                    ? 'border-custom-text-light dark:border-custom-text-dark'
-                                    : ''
-                                }
-                                ${
-                                  selectedDate != null &&
-                                  selectedDate.getDate() === date.getDate() &&
-                                  selectedDate.getMonth() === date.getMonth() &&
-                                  selectedDate.getFullYear() ===
-                                    date.getFullYear()
-                                    ? 'bg-primary text-white'
-                                    : 'focus:bg-primary'
-                                }
-                                ${
-                                  (minDateObj && date < minDateObj) ||
-                                  (maxDateObj && date > maxDateObj)
-                                    ? 'cursor-not-allowed opacity-50'
-                                    : ''
-                                }`}
+                                ${focusedDate && focusedDate.setHours(0, 0, 0, 0) === date.setHours(0, 0, 0, 0) ? 'border-primary' : 'border-transparent'}
+                                ${new Date().setHours(0, 0, 0, 0) === date.setHours(0, 0, 0, 0) ? 'border-custom-text-light dark:border-custom-text-dark' : ''}
+                                ${selectedDate != null && selectedDate.getDate() === date.getDate() && selectedDate.getMonth() === date.getMonth() && selectedDate.getFullYear() === date.getFullYear() ? 'bg-primary text-white' : 'focus:bg-primary'}
+                                ${(minDate && date < minDate) || (maxDate && date > maxDate) ? 'cursor-not-allowed opacity-50' : ''}`}
                               >
                                 {date.getDate()}
                               </button>
@@ -441,7 +433,7 @@ const Datepicker = ({
                               <div className="disabled" tabIndex={-1}></div> // For alignment purposes
                             )}
                           </td>
-                        )
+                        );
                       })}
                     </tr>
                   ))}
@@ -461,9 +453,7 @@ const Datepicker = ({
                   styleType="none"
                   handleClick={() => setIsKeyPanelOpen(!isKeyPanelOpen)}
                   Icon={InfoIcon}
-                  label={`${
-                    isKeyPanelOpen ? 'Close' : 'Open'
-                  } the calendar keyboard shortcuts information.`}
+                  label={`${isKeyPanelOpen ? 'Close' : 'Open'} the calendar keyboard shortcuts information.`}
                   showCaret={false}
                   customStyles="p-4"
                 />
@@ -548,7 +538,7 @@ const Datepicker = ({
         )}
       </div>
     </>
-  )
-}
+  );
+};
 
-export default Datepicker
+export default Datepicker;
